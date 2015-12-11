@@ -10,7 +10,7 @@ URL_W=http://emmy10.casa.umass.edu:8080/CloudLabWebPortal/WiscExportInOne
 dpkg -l | grep unzip > /dev/null
 if [ $? -ne 0 ]; then
   apt-get update
-  apt-get install -y unzip
+  apt-get install -y unzip curl
 fi
 
 # If set, try getting power data for all three sites
@@ -19,7 +19,7 @@ INCLUDE_ALL=0
 ENTIRE_SITE=0
 
 # Read parameters
-TEMP=`getopt -o s:l::ae --long site:,last::,all,entire-site -n 'power-client.sh' -- "$@"`
+TEMP=`getopt -o s:l:ae --long site:,last:,all,entire-site -n 'power-client.sh' -- "$@"`
 eval set -- "$TEMP"
 
 # Extract and process command line arguments
@@ -32,7 +32,6 @@ while true ; do
             esac ;;
         -l|--last)
             case "$2" in
-                "") LAST="6h" ; shift 2 ;;
                 *) LAST=$2 ; shift 2 ;;
             esac ;;
         -a|--all)  INCLUDE_ALL=1 ; shift ;;
@@ -106,7 +105,7 @@ mkdir $FINAL_DEST 2>/dev/null
 
 # Preserve *.csv in $FINAL_DEST but move them elsewhere
 mkdir "$FINAL_DEST-BACKUP" 2>/dev/null
-mv $FINAL_DEST/*.csv "$FINAL_DEST-BACKUP"
+mv $FINAL_DEST/*.csv "$FINAL_DEST-BACKUP" 2>/dev/null
 
 # Temporary location
 PTMP=/tmp/power-raw
@@ -136,11 +135,13 @@ for el in $LIST; do
         host_tmp=`echo $client_id | sed -s s/-man0//`
         host="$host_tmp".clemson.cloudlab.us
       elif [[ $client_id == c* ]] ; then 
-        host="$client_id".utah.cloudlab.us 
+        chassis_id=`echo $line | cut -d, -f5`
+        cartridge_id=`echo $client_id | sed -s s/n.*// | sed -s s/c//`
+        host=ms0"$chassis_id$cartridge_id".utah.cloudlab.us
       fi
+      #echo "$resource_id ---- $host"
+      cp "$PTMP/$resource_id.csv" "$FINAL_DEST/$host.csv"
     fi 
-    #echo "$resource_id ---- $host"
-    cp "$PTMP/$resource_id.csv" "$FINAL_DEST/$host.csv"
   done
 
 done

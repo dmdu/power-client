@@ -10,8 +10,10 @@ URL_W=http://emmy10.casa.umass.edu:8080/CloudLabWebPortal/WiscExportInOne
 dpkg -l | grep unzip > /dev/null
 if [ $? -ne 0 ]; then
   apt-get update
-  apt-get install -y unzip curl
+  apt-get install -y unzip
 fi
+
+apt-get install -y curl
 
 # If set, try getting power data for all three sites
 INCLUDE_ALL=0

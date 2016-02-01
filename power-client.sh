@@ -1,19 +1,21 @@
 #!/bin/bash
 
+SCRIPT_DIR=`pwd`
+
 # About: script for downloading power data on CloudLab
 
 URL_U=http://emmy10.casa.umass.edu:8080/CloudLabWebPortal/UtahExportInOne
 URL_C=http://emmy10.casa.umass.edu:8080/CloudLabWebPortal/ClemsonExportInOne
 URL_W=http://emmy10.casa.umass.edu:8080/CloudLabWebPortal/WiscExportInOne
 
-# Install required packages
-dpkg -l | grep unzip > /dev/null
-if [ $? -ne 0 ]; then
+GETOPT_CMD=getopt
+# Specific to OSX; the path is machine-specific
+if [[ $OSTYPE == "darwin"* ]] ; then
+  GETOPT_CMD=/usr/local/Cellar/gnu-getopt/1.1.6/bin/getopt
+else
   apt-get update
-  apt-get install -y unzip
+  apt-get install -y unzip curl
 fi
-
-apt-get install -y curl
 
 # If set, try getting power data for all three sites
 INCLUDE_ALL=0
@@ -21,7 +23,7 @@ INCLUDE_ALL=0
 ENTIRE_SITE=0
 
 # Read parameters
-TEMP=`getopt -o s:l:ae --long site:,last:,all,entire-site -n 'power-client.sh' -- "$@"`
+TEMP=`"$GETOPT_CMD" -o s:l:ae --long site:,last:,all,entire-site -n 'power-client.sh' -- "$@"`
 eval set -- "$TEMP"
 
 # Extract and process command line arguments
@@ -77,16 +79,12 @@ if [ -z "$HOURS" ] ; then
 fi
 
 # Setting Start and End timestamps
-END=`date -u +%Y-%m-%d\ %H:%M`
+END=`date -u '+%Y-%m-%d %H:%M'`
 NOW=`date -u +%s`
 START_S=$(($NOW-$HOURS*3600))
-START=`date -u -d@"$START_S" +%Y-%m-%d\ %H:%M`
+START=`date -u -r "$START_S" '+%Y-%m-%d %H:%M'`
 echo "START=$START"
 echo "END=$END"
-
-# Obtain the manifest
-MAN=/tmp/manifest.xml
-geni-get manifest > $MAN
 
 cd /tmp
 if [ $INCLUDE_ALL -eq 1 ] ; then
@@ -98,15 +96,17 @@ elif [ $ENTIRE_SITE -eq 1 ] ; then
   curl -o power.zip -F "start=$START" -F "end=$END" $URL
   LIST="power.zip"
 else
+  # Obtain the manifest
+  MAN=manifest.xml
   curl -o power.zip -F "start=$START" -F "end=$END" -F "cloudlab-manifest=@$MAN" $URL
   LIST="power.zip"
 fi
 
-FINAL_DEST=/var/log/power
-mkdir $FINAL_DEST 2>/dev/null
+FINAL_DEST=$SCRIPT_DIR/power
+mkdir -p $FINAL_DEST
 
 # Preserve *.csv in $FINAL_DEST but move them elsewhere
-mkdir "$FINAL_DEST-BACKUP" 2>/dev/null
+mkdir -p "$FINAL_DEST-BACKUP"
 mv $FINAL_DEST/*.csv "$FINAL_DEST-BACKUP" 2>/dev/null
 
 # Temporary location
@@ -116,7 +116,7 @@ for el in $LIST; do
 
   # Don't reuse old data in the temporary location
   rm -rf $PTMP
-  mkdir $PTMP 2>/dev/null
+  mkdir -p $PTMP
   
   unzip $el -d $PTMP > /dev/null
   
@@ -134,11 +134,11 @@ for el in $LIST; do
       if [[ $client_id == pc* ]] ; then 
         host="$client_id".wisc.cloudlab.us 
       elif [[ $client_id == cl* ]] ; then 
-        host_tmp=`echo $client_id | sed -s s/-man0//`
+        host_tmp=`echo $client_id | sed 's/-man0//'`
         host="$host_tmp".clemson.cloudlab.us
       elif [[ $client_id == c* ]] ; then 
         chassis_id=`echo $line | cut -d, -f5`
-        cartridge_id=`echo $client_id | sed -s s/n.*// | sed -s s/c//`
+        cartridge_id=`echo $client_id | sed 's/n.*//' | sed 's/c//'`
         host=ms0"$chassis_id$cartridge_id".utah.cloudlab.us
       fi
       #echo "$resource_id ---- $host"
